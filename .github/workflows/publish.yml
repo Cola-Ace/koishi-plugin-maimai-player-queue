@@ -33,10 +33,10 @@ jobs:
       run: npm publish
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-    - name: Create Release
-      uses: ncipollo/release-action@v1
-      with:
-        bodyFile: "CHANGELOG.md"
-        tag: v${{ env.PACKAGE_VERSION }}
-        name: v${{ env.PACKAGE_VERSION }}
-        token: ${{ secrets.PUB_GITHUB_TOKEN }}
+    # - name: Create Release
+    #   uses: ncipollo/release-action@v1
+    #   with:
+    #     bodyFile: "CHANGELOG.md"
+    #     tag: v${{ env.PACKAGE_VERSION }}
+    #     name: v${{ env.PACKAGE_VERSION }}
+    #     token: ${{ secrets.PUB_GITHUB_TOKEN }}
