@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-maimai-player-queue",
   "description": "Record playing & waiting players for maimai DX",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -31,6 +31,7 @@
     "esbuild-register": "^3.5.0",
     "eslint": "^8.57.0",
     "koishi": "^4.17.12",
+    "koishi-plugin-adapter-onebot": "^6.5.8",
     "typescript": "^5.5.3",
     "yakumo": "^0.3.13",
     "yakumo-esbuild": "^0.3.26",

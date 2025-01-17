@@ -1,4 +1,5 @@
 import { Context, Schema, h } from 'koishi';
+import { } from 'koishi-plugin-adapter-onebot';
 
 export const name = 'maimai-player-queue';
 
@@ -29,6 +30,8 @@ export const Config: Schema<Config> = Schema.object({
 var queues: number = 0;
 var updated: boolean = false;
 var updated_time: number = 0; // 时间戳
+var updated_name = "";
+var updated_id = "";
 
 function timeDifference(x: number): string {
   // 获取当前时间戳（单位为秒）
@@ -52,6 +55,15 @@ function timeDifference(x: number): string {
   }
 }
 
+// 将时间戳（秒）转换为 HH:MM:SS 格式
+function formatTime(x: number): string {
+  const date = new Date(x * 1000);
+  const hours = date.getHours().toString().padStart(2, "0");
+  const minutes = date.getMinutes().toString().padStart(2, "0");
+  const seconds = date.getSeconds().toString().padStart(2, "0");
+  return `${hours}:${minutes}:${seconds}`;
+}
+
 export function apply(ctx: Context, config: Config) {
   ctx.command("j").action((_) => {
     let exist = false;
@@ -64,12 +76,13 @@ export function apply(ctx: Context, config: Config) {
 
     if (!exist) return;
 
-    let message = `${h("at", { id: _.session.userId })}\n==================\n`;
+    let message = `${h("at", { id: _.session.userId })} 机厅数据如下:\n==================\n`;
     if (!updated){
-      message += "当前还没有人更新过排卡数据";
+      message += "当前还没有人更新过排卡数据\n==================\n请在到达机厅后输入 j+1 来加卡，退勤时使用 j-1 来减卡，多人出勤可修改后方数字来一次性增加/减少多个卡数";
       return message;
     }
     message += `${timeDifference(updated_time)}前 ${queues} 卡，机均 ${Math.floor(queues / config.maimai_count)} 卡\n==================\n`;
+    message += `由 ${updated_name} (${updated_id}) 更新于 ${formatTime(updated_time)}\n请在到达机厅后输入 j+1 来加卡，退勤时使用 j-1 来减卡，多人出勤可修改后方数字来一次性增加/减少多个卡数`;
 
     return message;
   });
@@ -108,8 +121,17 @@ export function apply(ctx: Context, config: Config) {
     updated = true;
     updated_time = Math.floor(Date.now() / 1000);
 
+    updated_id = session.userId;
+    // 获取发送者信息
+    if (session.platform === "onebot"){
+      const sender = await session.onebot.getGroupMemberInfo(session.channelId, session.userId);
+      updated_name = sender.card === "" ? sender.nickname : sender.card;
+    } else {
+      updated_name = session.event.user.name;
+    }
+
     // 返回消息
-    let result = `${h("at", { id: session.userId })}\n==================\n已更新排卡数据，当前 ${queues} 卡，机均 ${Math.floor(queues / config.maimai_count)} 卡`;
+    let result = `${h("at", { id: session.userId })} ${formatTime(updated_time)} 更新成功，当前 ${queues} 卡，机均 ${Math.floor(queues / config.maimai_count)} 卡`;
     await session.send(result);
   });
 
