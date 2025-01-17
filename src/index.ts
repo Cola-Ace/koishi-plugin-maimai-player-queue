@@ -33,6 +33,8 @@ var updated_time: number = 0; // 时间戳
 var updated_name = "";
 var updated_id = "";
 
+const note = "请在到达机厅后输入 j+1 来加卡，退勤时使用 j-1 来减卡，多人出勤可修改后方数字来一次性增加/减少多个卡数\n使用 j[数字] 可快速设置当前排卡数";
+
 function timeDifference(x: number): string {
   // 获取当前时间戳（单位为秒）
   const t = Math.floor(Date.now() / 1000);
@@ -78,11 +80,11 @@ export function apply(ctx: Context, config: Config) {
 
     let message = `${h("at", { id: _.session.userId })} 机厅数据如下:\n==================\n`;
     if (!updated){
-      message += "当前还没有人更新过排卡数据\n==================\n请在到达机厅后输入 j+1 来加卡，退勤时使用 j-1 来减卡，多人出勤可修改后方数字来一次性增加/减少多个卡数";
+      message += `当前还没有人更新过排卡数据\n==================\n${note}`;
       return message;
     }
     message += `${timeDifference(updated_time)}前 ${queues} 卡，机均 ${Math.floor(queues / config.maimai_count)} 卡\n==================\n`;
-    message += `由 ${updated_name} (${updated_id}) 更新于 ${formatTime(updated_time)}\n请在到达机厅后输入 j+1 来加卡，退勤时使用 j-1 来减卡，多人出勤可修改后方数字来一次性增加/减少多个卡数`;
+    message += `由 ${updated_name} (${updated_id}) 更新于 ${formatTime(updated_time)}\n${note}`;
 
     return message;
   });
@@ -98,14 +100,15 @@ export function apply(ctx: Context, config: Config) {
 
     if (!exist) return;
 
-    // 判断消息格式是否为 j<操作符+-=><数字>
+    // 判断消息格式是否为 j<操作符+-><数字>
     const message = session.content;
-    const regex = /j[+-=]\d+/;
+    const regex = /^j[+-]?(0|[1-9][0-9]*)$/i;
     if (!regex.test(message)) return;
 
     // 获取操作符和数字
-    const operator = message[1];
-    const number = parseInt(message.slice(2));
+    const operator = (message[1] === "+" || message[1] === "-") ? message[1] : "=";
+    const number = parseInt(message.slice(operator === "=" ? 1 : 2));
+    console.log(number);
 
     if (number < 0) return;
 
@@ -136,11 +139,11 @@ export function apply(ctx: Context, config: Config) {
   });
 
   ctx.setInterval(() => {
-    // 每分钟检查一次是否已经是第二天了，如果是就将 queues 设置为 0 并将 updated 设置为 false
+    // 每 50 秒检查一次是否已经是第二天了，如果是就将 queues 设置为 0 并将 updated 设置为 false
     const now = new Date();
     if (now.getHours() === 0 && now.getMinutes() === 0){
       queues = 0;
       updated = false;
     }
-  }, 1000 * 60);
+  }, 1000 * 50);
 }
