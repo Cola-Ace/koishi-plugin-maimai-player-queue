@@ -1,6 +1,5 @@
 ### 🚀 Features
-- 修改命令
-- 修改定时器间隔 (60s -> 50s)
+- None
 
 ### 🐞 Bug Fixes
-- None
+- 修复了日志会打印神秘数字的 bug

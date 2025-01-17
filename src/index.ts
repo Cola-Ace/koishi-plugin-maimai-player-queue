@@ -108,7 +108,6 @@ export function apply(ctx: Context, config: Config) {
     // 获取操作符和数字
     const operator = (message[1] === "+" || message[1] === "-") ? message[1] : "=";
     const number = parseInt(message.slice(operator === "=" ? 1 : 2));
-    console.log(number);
 
     if (number < 0) return;
 
