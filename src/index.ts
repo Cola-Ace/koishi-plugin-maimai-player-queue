@@ -11,9 +11,19 @@ interface GroupList {
   group_id: string,
 }
 
+interface SyncGroupList {
+  enabled: boolean,
+  note: string,
+  platform: string,
+  self_id: string,
+  group_id: string,
+  prefix_command: string,
+}
+
 export interface Config {
   maimai_count: number,
   constant: Array<GroupList>,
+  sync_group: Array<SyncGroupList>,
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -25,6 +35,14 @@ export const Config: Schema<Config> = Schema.object({
     self_id: Schema.string().description("机器人id").required(),
     group_id: Schema.string().description("群号").required(),
   })),
+  sync_group: Schema.array(Schema.object({
+    enabled: Schema.boolean().description("是否启用").default(true),
+    note: Schema.string().description("备注"),
+    platform: Schema.string().description("平台").required(),
+    self_id: Schema.string().description("机器人id").required(),
+    group_id: Schema.string().description("群号").required(),
+    prefix_command: Schema.string().description("前缀指令").default("j").required(),
+  })).description("将排卡同步更新到其他群"),
 });
 
 var queues: number = 0;
@@ -135,6 +153,17 @@ export function apply(ctx: Context, config: Config) {
     // 返回消息
     let result = `${h("at", { id: session.userId })} ${formatTime(updated_time)} 更新成功，当前 ${queues} 卡，机均 ${Math.floor(queues / config.maimai_count)} 卡`;
     await session.send(result);
+
+    // 同步更新到其他群
+    for (let i = 0; i < config.sync_group.length; i++){
+      if (config.sync_group[i].enabled){
+        const prefix = config.sync_group[i].prefix_command;
+        const message = `${prefix}${queues}`;
+
+        const sync_bot = ctx.bots[`${config.sync_group[i].platform}:${config.sync_group[i].self_id}`];
+        await sync_bot.sendMessage(config.sync_group[i].group_id, message);
+      }
+    }
   });
 
   ctx.setInterval(() => {
