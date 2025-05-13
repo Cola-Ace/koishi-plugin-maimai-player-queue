@@ -22,12 +22,14 @@ interface SyncGroupList {
 
 export interface Config {
   maimai_count: number,
+  max_cards: number,
   constant: Array<GroupList>,
   sync_group: Array<SyncGroupList>,
 }
 
 export const Config: Schema<Config> = Schema.object({
   maimai_count: Schema.number().description("舞萌数量").default(1).min(1),
+  max_cards: Schema.number().description("最大排卡数").default(30).min(1),
   constant: Schema.array(Schema.object({
     enabled: Schema.boolean().description("是否启用").default(true),
     note: Schema.string().description("备注"),
@@ -69,9 +71,9 @@ function timeDifference(x: number): string {
 
   // 构建返回字符串
   if (hours > 0) {
-      return `${hours} 小时 ${remainingMinutes} 分钟`;
+    return `${hours} 小时 ${remainingMinutes} 分钟`;
   } else {
-      return `${minutes} 分钟`;
+    return `${minutes} 分钟`;
   }
 }
 
@@ -84,11 +86,26 @@ function formatTime(x: number): string {
   return `${hours}:${minutes}:${seconds}`;
 }
 
+function getAverageCards(queues: number, maimai_count: number): string {
+  if (queues % maimai_count === 0) return queues.toString();
+  return `${Math.floor(queues / maimai_count)}+`;
+}
+
+function changeCards(queues: number, update: number, operator: string): number {
+  if (operator === "+") {
+    return queues + update;
+  } else if (operator === "-") {
+    return queues - update;
+  } else if (operator === "=") {
+    return update;
+  }
+}
+
 export function apply(ctx: Context, config: Config) {
   ctx.command("j").action((_) => {
     let exist = false;
-    for (let i = 0; i < config.constant.length; i++){
-      if (config.constant[i].enabled && config.constant[i].platform === _.session.platform && config.constant[i].self_id === _.session.selfId && config.constant[i].group_id === _.session.channelId){
+    for (let i = 0; i < config.constant.length; i++) {
+      if (config.constant[i].enabled && config.constant[i].platform === _.session.platform && config.constant[i].self_id === _.session.selfId && config.constant[i].group_id === _.session.channelId) {
         exist = true;
         break;
       }
@@ -97,11 +114,11 @@ export function apply(ctx: Context, config: Config) {
     if (!exist) return;
 
     let message = `${h("at", { id: _.session.userId })} 机厅数据如下:\n==================\n`;
-    if (!updated){
+    if (!updated) {
       message += `当前还没有人更新过排卡数据\n==================\n${note}`;
       return message;
     }
-    message += `${timeDifference(updated_time)}前 ${queues} 卡，机均 ${Math.floor(queues / config.maimai_count)} 卡\n==================\n`;
+    message += `${timeDifference(updated_time)}前 ${queues} 卡，机均 ${getAverageCards(queues, config.maimai_count)} 卡\n==================\n`;
     message += `由 ${updated_name} (${updated_id}) 更新于 ${formatTime(updated_time)}\n${note}`;
 
     return message;
@@ -109,8 +126,8 @@ export function apply(ctx: Context, config: Config) {
 
   ctx.on("message", async (session) => {
     let exist = false;
-    for (let i = 0; i < config.constant.length; i++){
-      if (config.constant[i].enabled && config.constant[i].platform === session.platform && config.constant[i].self_id === session.selfId && config.constant[i].group_id === session.channelId){
+    for (let i = 0; i < config.constant.length; i++) {
+      if (config.constant[i].enabled && config.constant[i].platform === session.platform && config.constant[i].self_id === session.selfId && config.constant[i].group_id === session.channelId) {
         exist = true;
         break;
       }
@@ -125,25 +142,28 @@ export function apply(ctx: Context, config: Config) {
 
     // 获取操作符和数字
     const operator = (message[1] === "+" || message[1] === "-") ? message[1] : "=";
-    const number = parseInt(message.slice(operator === "=" ? 1 : 2));
+    const update = parseInt(message.slice(operator === "=" ? 1 : 2));
 
-    if (number < 0) return;
+    if (update < 0) {
+      await session.send(`${h.at(session.userId)} 干什么！`);
+      return;
+    }
 
     // 更新排卡数据
-    if (operator === "+"){
-      queues += number;
-    } else if (operator === "-"){
-      queues -= number;
-    } else if (operator === "="){
-      queues = number;
+    const temp = changeCards(queues, update, operator);
+    if (temp < 0 || temp > config.max_cards) {
+      await session.send(`${h.at(session.userId)} 干什么！`);
+      return;
     }
+
+    queues = temp;
 
     updated = true;
     updated_time = Math.floor(Date.now() / 1000);
 
     updated_id = session.userId;
     // 获取发送者信息
-    if (session.platform === "onebot"){
+    if (session.platform === "onebot") {
       const sender = await session.onebot.getGroupMemberInfo(session.channelId, session.userId);
       updated_name = sender.card === "" ? sender.nickname : sender.card;
     } else {
@@ -151,12 +171,12 @@ export function apply(ctx: Context, config: Config) {
     }
 
     // 返回消息
-    let result = `${h("at", { id: session.userId })} ${formatTime(updated_time)} 更新成功，当前 ${queues} 卡，机均 ${Math.floor(queues / config.maimai_count)} 卡`;
+    let result = `${h("at", { id: session.userId })} ${formatTime(updated_time)} 更新成功，当前 ${queues} 卡，机均 ${getAverageCards(queues, config.maimai_count)} 卡`;
     await session.send(result);
 
     // 同步更新到其他群
-    for (let i = 0; i < config.sync_group.length; i++){
-      if (config.sync_group[i].enabled){
+    for (let i = 0; i < config.sync_group.length; i++) {
+      if (config.sync_group[i].enabled) {
         const prefix = config.sync_group[i].prefix_command;
         const message = `${prefix}${queues}`;
 
@@ -169,7 +189,7 @@ export function apply(ctx: Context, config: Config) {
   ctx.setInterval(() => {
     // 每 50 秒检查一次是否已经是第二天了，如果是就将 queues 设置为 0 并将 updated 设置为 false
     const now = new Date();
-    if (now.getHours() === 0 && now.getMinutes() === 0){
+    if (now.getHours() === 0 && now.getMinutes() === 0) {
       queues = 0;
       updated = false;
     }
