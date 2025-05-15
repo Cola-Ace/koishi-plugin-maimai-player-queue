@@ -87,7 +87,7 @@ function formatTime(x: number): string {
 }
 
 function getAverageCards(queues: number, maimai_count: number): string {
-  if (queues % maimai_count === 0) return queues.toString();
+  if (queues % maimai_count === 0) return (queues / maimai_count).toString();
   return `${Math.floor(queues / maimai_count)}+`;
 }
 
