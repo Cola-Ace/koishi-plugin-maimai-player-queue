@@ -136,7 +136,7 @@ export function apply(ctx: Context, config: Config) {
     if (!exist) return;
 
     // 判断消息格式是否为 j<操作符+-><数字>
-    const message = session.content;
+    const message = session.content.replaceAll(" ", "").toLowerCase();
     const regex = /^j[+-]?(0|[1-9][0-9]*)$/i;
     if (!regex.test(message)) return;
 
