@@ -3,7 +3,7 @@ import { } from 'koishi-plugin-adapter-onebot';
 
 export const name = 'maimai-player-queue';
 
-interface GroupList {
+interface Group {
   enabled: boolean,
   note: string,
   platform: string,
@@ -11,40 +11,42 @@ interface GroupList {
   group_id: string,
 }
 
-interface SyncGroupList {
+interface SyncGroup {
   enabled: boolean,
   note: string,
   platform: string,
   self_id: string,
   group_id: string,
   prefix_command: string,
+  match_regex: string
 }
 
 export interface Config {
   maimai_count: number,
   max_cards: number,
-  constant: Array<GroupList>,
-  sync_group: Array<SyncGroupList>,
+  constant: Group,
+  sync_group: SyncGroup,
 }
 
 export const Config: Schema<Config> = Schema.object({
   maimai_count: Schema.number().description("舞萌数量").default(1).min(1),
   max_cards: Schema.number().description("最大排卡数").default(30).min(1),
-  constant: Schema.array(Schema.object({
+  constant: Schema.object({
     enabled: Schema.boolean().description("是否启用").default(true),
     note: Schema.string().description("备注"),
     platform: Schema.string().description("平台").required(),
-    self_id: Schema.string().description("机器人id").required(),
+    self_id: Schema.string().description("机器人 ID").required(),
     group_id: Schema.string().description("群号").required(),
-  })),
-  sync_group: Schema.array(Schema.object({
+  }),
+  sync_group: Schema.object({
     enabled: Schema.boolean().description("是否启用").default(true),
     note: Schema.string().description("备注"),
     platform: Schema.string().description("平台").required(),
-    self_id: Schema.string().description("机器人id").required(),
+    self_id: Schema.string().description("机器人 ID").required(),
     group_id: Schema.string().description("群号").required(),
-    prefix_command: Schema.string().description("前缀指令").default("j").required(),
-  })).description("将排卡同步更新到其他群"),
+    prefix_command: Schema.string().description("前缀指令").default("j"),
+    match_regex: Schema.string().description("匹配正则")
+  }).description("将排卡同步更新到其他群"),
 });
 
 var queues: number = 0;
@@ -104,11 +106,8 @@ function changeCards(queues: number, update: number, operator: string): number {
 export function apply(ctx: Context, config: Config) {
   ctx.command("j").action((_) => {
     let exist = false;
-    for (let i = 0; i < config.constant.length; i++) {
-      if (config.constant[i].enabled && config.constant[i].platform === _.session.platform && config.constant[i].self_id === _.session.selfId && config.constant[i].group_id === _.session.channelId) {
-        exist = true;
-        break;
-      }
+    if (config.constant.enabled && config.constant.platform === _.session.platform && config.constant.self_id === _.session.selfId && config.constant.group_id === _.session.channelId) {
+      exist = true;
     }
 
     if (!exist) return;
@@ -126,11 +125,36 @@ export function apply(ctx: Context, config: Config) {
 
   ctx.on("message", async (session) => {
     let exist = false;
-    for (let i = 0; i < config.constant.length; i++) {
-      if (config.constant[i].enabled && config.constant[i].platform === session.platform && config.constant[i].self_id === session.selfId && config.constant[i].group_id === session.channelId) {
-        exist = true;
-        break;
+
+    // process sync
+    if (config.sync_group.enabled && config.sync_group.platform === session.platform && config.sync_group.self_id === session.selfId && config.sync_group.group_id === session.channelId) {
+      if (session.quote.user.id === session.selfId || session.quote.content.indexOf("j") !== -1) {
+        return;
       }
+
+      // 检查消息是否匹配正则表达式
+      const regex = new RegExp(config.sync_group.match_regex, "i");
+      const match = session.content.match(regex);
+
+      if (match) {
+        const cardCount = parseInt(match[1]);
+
+        // 更新排卡数据
+        queues = cardCount;
+        updated = true;
+        updated_time = Math.floor(Date.now() / 1000);
+        updated_id = session.userId;
+        updated_name = "同步群";
+
+        // 发送确认消息
+        const src_bot = ctx.bots[`${config.constant.platform}:${config.constant.self_id}`];
+        await src_bot.sendMessage(config.constant.group_id, `${formatTime(updated_time)} 已同步排卡数据: 当前 ${cardCount} 卡，机均 ${getAverageCards(cardCount, config.maimai_count)} 卡`);
+      }
+      return;
+    }
+
+    if (config.constant.enabled && config.constant.platform === session.platform && config.constant.self_id === session.selfId && config.constant.group_id === session.channelId) {
+      exist = true;
     }
 
     if (!exist) return;
@@ -175,14 +199,12 @@ export function apply(ctx: Context, config: Config) {
     await session.send(result);
 
     // 同步更新到其他群
-    for (let i = 0; i < config.sync_group.length; i++) {
-      if (config.sync_group[i].enabled) {
-        const prefix = config.sync_group[i].prefix_command;
-        const message = `${prefix}${queues}`;
+    if (config.sync_group.enabled) {
+      const prefix = config.sync_group.prefix_command;
+      const message = `${prefix}${queues}`;
 
-        const sync_bot = ctx.bots[`${config.sync_group[i].platform}:${config.sync_group[i].self_id}`];
-        await sync_bot.sendMessage(config.sync_group[i].group_id, message);
-      }
+      const sync_bot = ctx.bots[`${config.sync_group.platform}:${config.sync_group.self_id}`];
+      await sync_bot.sendMessage(config.sync_group.group_id, message);
     }
   });
 
