@@ -128,7 +128,7 @@ export function apply(ctx: Context, config: Config) {
 
     // process sync
     if (config.sync_group.enabled && config.sync_group.platform === session.platform && config.sync_group.self_id === session.selfId && config.sync_group.group_id === session.channelId) {
-      if (session.quote.user.id === session.selfId || session.quote.content.indexOf("j") !== -1) {
+      if (session.quote.user.id === session.selfId || session.quote.content.indexOf("j") !== -1 || config.sync_group.match_regex === "") {
         return;
       }
 
